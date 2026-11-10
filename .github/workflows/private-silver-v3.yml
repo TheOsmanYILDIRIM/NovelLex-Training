@@ -1,0 +1,63 @@
+name: NovelLex private audited silver v3 LoRA research
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - training/novellex_private_silver_v3.py
+      - training/verify_silver_v3.py
+      - private-data/novellex-silver-v3-20261110.zip
+      - .github/workflows/private-silver-v3.yml
+
+permissions:
+  contents: read
+
+jobs:
+  research-finetune-and-compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Check out private repository
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify private v3 corpus and code before expensive training
+        run: |
+          python -m py_compile training/novellex_private_silver_v3.py training/verify_silver_v3.py
+          test -s private-data/novellex-silver-v3-20261110.zip
+          python training/verify_silver_v3.py \
+            --zip private-data/novellex-silver-v3-20261110.zip \
+            --expected-sha256 542f9750193e77c0853c8cb219b86c3cad130aa62cb50769221ad059910a20d7
+      - name: Install pinned GLiNER2.5 training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'gliner2[train]==2.1.0'
+      - name: Four epoch research LoRA with book-disjoint dev and original baseline comparison
+        run: |
+          python training/novellex_private_silver_v3.py \
+            --bundle private-data/novellex-silver-v3-20261110.zip \
+            --output silver_v3_output \
+            --epochs 4
+      - name: Save private research adapter and aggregate report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: novellex-private-silver-v3-research-adapter
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            silver_v3_output/preflight.json
+            silver_v3_output/comparison_report.json
+            silver_v3_output/checkpoints/best/adapter_model.safetensors
+            silver_v3_output/checkpoints/best/adapter_config.json
+            silver_v3_output/checkpoints/final/adapter_model.safetensors
+            silver_v3_output/checkpoints/final/adapter_config.json
