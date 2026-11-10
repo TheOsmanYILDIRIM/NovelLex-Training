@@ -92,7 +92,7 @@ def snippets(chapter):
         out = defaultdict(set)
         for a, b, label in local:
             out[label].add(text[start + a:start + b])
-        sample = {"input": text[start:end], "output": {lab: sorted(terms) for lab, terms in out.items()}}
+        sample = {"input": text[start:end], "output": {"entities": {lab: sorted(terms) for lab, terms in out.items()}}}
         reference = {"spans": [{"start": a, "end": b, "label": label} for a, b, label in local]}
         rows.append((sample, reference))
     return rows
@@ -144,7 +144,7 @@ def prepare(bundle, out):
         a = context.find(term)
         if a < 0 or context.find(term, a + 1) >= 0:
             continue
-        sets["holdout"].append({"input": context, "output": {lab: [term]}})
+        sets["holdout"].append({"input": context, "output": {"entities": {lab: [term]}}})
         refs["holdout"].append({"spans": [{"start": a, "end": a + len(term), "label": lab}]})
     assert len(sets["holdout"]) == 25, f"Holdout changed unexpectedly: {len(sets['holdout'])}"
     assert len(sets["train"]) >= 180 and len(sets["dev"]) >= 35, "Insufficient real-novel windows"
