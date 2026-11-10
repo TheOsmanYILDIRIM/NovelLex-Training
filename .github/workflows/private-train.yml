@@ -1,0 +1,56 @@
+name: NovelLex private provisional LoRA training
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: 'CPU LoRA steps'
+        required: true
+        default: '64'
+        type: choice
+        options:
+          - '64'
+          - '128'
+          - '256'
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+      PYTHONUNBUFFERED: '1'
+      NOVELLEX_STEPS: ${{ inputs.steps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require private uploaded dataset (no public fallback)
+        run: |
+          test -s private-data/novellex-private-input.zip || { echo 'BLOCKED: private input ZIP is not uploaded'; exit 1; }
+      - name: Validate dataset structure and source provenance
+        run: python training/private_train.py validate --output output
+      - name: Install model dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "gliner2[train]==2.1.0"
+      - name: Train private LoRA on provisional labels
+        run: python training/private_train.py train --output output --steps "$NOVELLEX_STEPS"
+      - name: Publish adapter and metadata within private repo
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: novellex-private-provisional-adapter
+          retention-days: 14
+          path: |
+            output/checkpoints/final/adapter_model.safetensors
+            output/checkpoints/final/adapter_config.json
+            output/training_report.json
+            output/checks.json
