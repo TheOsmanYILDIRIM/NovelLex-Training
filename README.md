@@ -17,3 +17,10 @@ The synthetic LoRA run did not improve F1. A private 64-step LoRA trained on 75 
 
 ## Privacy
 Private is access-controlled, **not encrypted**. People with repository access can view private files and Actions artifacts. Keep GitHub Actions logs free of original text, tokens, and annotations. No public releases or model uploads.
+
+## Verified v2 outcomes — 2026-11-10
+
+- [Real-novel fine-tune + nine-label benchmark](https://github.com/TheOsmanYILDIRIM/NovelLex-Training/actions/runs/42872631001) succeeded: 256 LoRA steps, 337 real-text training windows, 97 development windows, withheld Mother of Learning 25 positive contexts. Development known-positive recall: base **207/319 (64.89%)**, adapted **225/319 (70.53%)**. Withheld book under this nine-label schema: base **19/25 (76%)**, adapted **21/25 (84%)**.
+- [Exact original eight-label benchmark](https://github.com/TheOsmanYILDIRIM/NovelLex-Training/actions/runs/42874164506) succeeded **without retraining**: base **21/25 (84%)**, adapted v2 **21/25 (84%)**. Earlier small private adapter: **19/25 (76%)**. Thus **v2 recovered the earlier regression but did not beat the original base under the original evaluation protocol.**
+- [Private v2 model artifact](https://github.com/TheOsmanYILDIRIM/NovelLex-Training/actions/runs/42872631001/artifacts/13790078974) contains trained adapter, config, data summary and aggregate metrics. Artifacts have limited retention.
+- Evaluation uses only partial silver and teacher-provisional labels. Unverified predictions are not verified errors; neither precision nor F1 is established. No Android/model integration or fully audited gold test has been performed. **Retain the base model as the current default** until genuinely independent gold data establishes improved quality.
