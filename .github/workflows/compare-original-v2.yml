@@ -1,0 +1,52 @@
+name: NovelLex v2 same original eight-label benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/compare-original-v2.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare-original:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require the exact original teacher-provisional held-out text
+        run: test -s private-data/novellex-private-input.zip
+      - name: Obtain saved v2 adapter without retraining
+        run: |
+          mkdir -p adapter-download
+          gh run download 42872631001 --repo "$GITHUB_REPOSITORY" --name novellex-real-v2-private-adapter-and-comparison --dir adapter-download
+          test -s adapter-download/checkpoints/final/adapter_model.safetensors
+          test -s adapter-download/checkpoints/final/adapter_config.json
+      - name: Install original pinned model dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'gliner2[train]==2.1.0'
+      - name: Compare v2 LoRA to original GLiNER under original eight categories
+        run: |
+          python training/compare_private.py --adapter adapter-download/checkpoints/final --output original_protocol_v2
+      - name: Publish private aggregate metrics only
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: novellex-v2-original-eight-label-benchmark
+          retention-days: 14
+          if-no-files-found: error
+          path: original_protocol_v2/comparison_report.json
