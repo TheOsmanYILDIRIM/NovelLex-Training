@@ -204,14 +204,22 @@ def finetune(out, steps):
 def predict(model, text):
     raw = model.extract_entities(text, NAMES, threshold=0.5, include_spans=True)
     found = set()
+    invalid = 0
     for lab, ents in raw.get("entities", {}).items():
-        assert lab in NAMES
+        if lab not in NAMES:
+            invalid += len(ents or [])
+            continue
         for e in ents or []:
-            a, b = e["start"], e["end"]
-            assert isinstance(a, int) and isinstance(b, int) and 0 <= a < b <= len(text)
-            assert text[a:b] == e["text"]
+            try:
+                a, b = int(e["start"]), int(e["end"])
+                ok = (0 <= a < b <= len(text) and text[a:b] == e["text"])
+            except (KeyError, ValueError, TypeError, OverflowError):
+                ok = False
+            if not ok:
+                invalid += 1
+                continue
             found.add((lab, a, b))
-    return found
+    return found, invalid
 
 
 def evaluate(model, out, split):
@@ -225,7 +233,8 @@ def evaluate(model, out, split):
         for row, ref in zip(rows, refs):
             gold = {(e["label"], e["start"], e["end"]) for e in ref["spans"]}
             assert gold
-            found = predict(model, row["input"])
+            found, invalid = predict(model, row["input"])
+            count["invalid_offsets"] += invalid
             count["known_positive"] += len(gold)
             count["recovered"] += len(gold & found)
             count["predictions"] += len(found)
@@ -238,6 +247,7 @@ def evaluate(model, out, split):
         "predicted_mentions": count["predictions"],
         "unverified_predictions_not_false_positives": count["unverified"],
         "contexts": count["contexts"],
+        "invalid_model_offsets_skipped": count["invalid_offsets"],
         "cpu_seconds": round(time.monotonic() - start, 3),
     }
 

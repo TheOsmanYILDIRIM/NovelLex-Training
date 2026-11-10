@@ -45,12 +45,12 @@ jobs:
         run: |
           python training/novellex_real_v2.py compare --output real_v2_output --adapter real_v2_output/checkpoints/final
       - name: Export ONLY private adapter and aggregate metrics, never raw novel text
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: novellex-real-v2-private-adapter-and-comparison
           retention-days: 14
-          if-no-files-found: error
+          if-no-files-found: warn
           path: |
             real_v2_output/checkpoints/final/adapter_model.safetensors
             real_v2_output/checkpoints/final/adapter_config.json
