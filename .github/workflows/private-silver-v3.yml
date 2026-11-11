@@ -56,6 +56,7 @@ jobs:
           if-no-files-found: warn
           path: |
             silver_v3_output/preflight.json
+            silver_v3_output/alignment_report.json
             silver_v3_output/comparison_report.json
             silver_v3_output/checkpoints/best/adapter_model.safetensors
             silver_v3_output/checkpoints/best/adapter_config.json

@@ -91,6 +91,40 @@ def prepare(bundle, out):
     return summary
 
 
+def build_token_aligned_training_files(processor, out):
+    """Filter whole unalignable examples with the same processor used by the trainer.
+    Never convert a dropped positive annotation into an implicit negative.
+    Preserve source/dev/holdout for original-protocol comparisons.
+    """
+    assert hasattr(processor, 'find_unalignable_entities'), 'Alignment API unavailable'
+    report = {'source_data_unchanged': True, 'method': 'gliner2_processor_alignment', 'policy': 'skip_whole_window'}
+    for split in ('train', 'dev'):
+        rows = readrows(out / (split + '.jsonl'))
+        kept = []
+        failures = collections.Counter()
+        for row in rows:
+            bad = processor.find_unalignable_entities(row['input'], row['output']['entities'])
+            if bad:
+                for item in bad:
+                    failures[item['entity_type']] += 1
+                continue
+            kept.append(row)
+        assert len(kept) >= len(rows) * 0.80, f'Too many {split} tokenizer failures'
+        assert kept
+        target = out / (split + '_token_aligned.jsonl')
+        with target.open('w', encoding='utf-8') as handle:
+            for row in kept:
+                handle.write(json.dumps(row, ensure_ascii=False) + '\n')
+        persisted = readrows(target)
+        assert len(persisted) == len(kept)
+        assert all(not processor.find_unalignable_entities(x['input'], x['output']['entities']) for x in persisted)
+        report[split] = {'original_windows': len(rows), 'retained_windows': len(kept),
+                         'excluded_whole_windows': len(rows) - len(kept),
+                         'unalignable_labels_by_class': dict(sorted(failures.items()))}
+    (out / 'alignment_report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+    print('PRIVATE_V3_TOKEN_ALIGNMENT_PASS', json.dumps(report), flush=True)
+    return report
+
 def train(out, num_epochs):
     import torch
     from gliner2 import AutoExtractor
@@ -115,7 +149,9 @@ def train(out, num_epochs):
         lora_target_modules=['encoder','all_task_heads'], save_adapter_only=True,
     )
     trainer = ExtractorTrainer(model, config)
-    result = trainer.train(train_data=str(out/'train.jsonl'),eval_data=str(out/'dev.jsonl'))
+    build_token_aligned_training_files(trainer.processor, out)
+    result = trainer.train(train_data=str(out/'train_token_aligned.jsonl'),
+                           eval_data=str(out/'dev_token_aligned.jsonl'))
     best = out/'checkpoints'/'best'
     final = out/'checkpoints'/'final'
     adapter = best if (best/'adapter_model.safetensors').is_file() else final
